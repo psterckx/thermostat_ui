@@ -1,60 +1,102 @@
 <template>
-  <div id="app">
-    <div>
-      <div>
-        user desired:
-        {{ userDesiredTemperature }}
-      </div>
-      <div>
-        desired:
-        {{ state ? state.desired.thermostat_temperature : "??" }}
-      </div>
-      <div>
-        reported:
-        {{ state ? state.reported.thermostat_temperature : "??" }}
-      </div>
-      <div>
-        measured:
-        {{
-          state && state.reported.measured_temperture
-            ? state.reported.measured_temperture
-            : "??"
-        }}
+  <div class="m-4 mt-5" id="app">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 text-center fs-1" :class="{ 'fw-bold': delta }">
+          {{
+            !isAuthTokenValid
+              ? "??"
+              : delta
+              ? userDesiredTemperature
+              : state
+              ? state.reported.thermostat_temperature
+              : "??"
+          }}
+        </div>
+        <div class="col-12 text-center mb-2">Set Temperature</div>
+        <div class="col-12 text-center fs-3">
+          {{
+            !isAuthTokenValid
+              ? "??"
+              : state && state.reported.measured_temperature
+              ? Math.round(state.reported.measured_temperature)
+              : "??"
+          }}
+        </div>
+        <div class="col-12 text-center mb-5">Measured Temperature</div>
+        <div class="col-5 offset-1 text-center">
+          <button
+            type="button"
+            class="btn btn-secondary w-100"
+            :disabled="isRequestInFlight || inErrorState || !isDeviceOnline"
+            @click="updateUserDesiredTemperature(-1)"
+          >
+            decrease
+          </button>
+        </div>
+        <div class="col-5 text-center mb-2">
+          <button
+            type="button"
+            class="btn btn-secondary w-100"
+            :disabled="isRequestInFlight || inErrorState || !isDeviceOnline"
+            @click="updateUserDesiredTemperature(1)"
+          >
+            increase
+          </button>
+        </div>
+        <div class="col-10 offset-1 text-center mb-2">
+          <button
+            type="button"
+            :disabled="
+              !(delta && !isRequestInFlight) || inErrorState || !isDeviceOnline
+            "
+            class="btn w-100"
+            :class="{ 'btn-secondary': !delta, 'btn-success': delta }"
+            @click="flight(updateSetTemperature, [userDesiredTemperature])"
+          >
+            update
+          </button>
+        </div>
+        <div class="col-10 offset-1 text-center mb-5">
+          <button
+            type="button"
+            class="btn btn-primary w-100"
+            @click="flight(getDeviceShadowState)"
+            :disabled="isRequestInFlight || !isAuthTokenValid"
+          >
+            refresh
+          </button>
+        </div>
+        <div class="col-12 text-center d-flex justify-content-center mb-5">
+          <span
+            class="dot mx-2"
+            :class="{
+              'device-online': isDeviceOnline,
+              'device-state-unknown': !isAuthTokenValid,
+            }"
+          ></span>
+          <span>
+            {{
+              !isAuthTokenValid
+                ? "Device state unknown"
+                : isDeviceOnline
+                ? "Device online"
+                : "Device offline"
+            }}
+          </span>
+        </div>
+        <div class="col-12 text-center d-flex justify-content-center">
+          <span class="input-group-text" id="basic-addon1">token</span>
+          <input
+            v-model="authToken"
+            type="text"
+            class="form-control"
+            placeholder=""
+            :disabled="isAuthTokenValid"
+          />
+        </div>
       </div>
     </div>
-
-    <button
-      type="button"
-      class="btn btn-secondary"
-      :disabled="isRequestInFlight"
-      @click="updateUserDesiredTemperature(1)"
-    >
-      increase
-    </button>
-    <button
-      type="button"
-      class="btn btn-secondary"
-      :disabled="isRequestInFlight"
-      @click="updateUserDesiredTemperature(-1)"
-    >
-      decrease
-    </button>
-    <button
-      type="button"
-      :disabled="!(delta && !isRequestInFlight)"
-      class="btn"
-      :class="{ 'btn-secondary': !delta, 'btn-success': delta }"
-      @click="flight(updateSetTemperature(userDesiredTemperature))"
-    >
-      update
-      <!-- <div v-if="!isRequestInFlight">update</div> -->
-      <!-- <div v-else class="spinner-border spinner-border-sm" role="status"></div> -->
-    </button>
-    <button type="button" class="btn btn-primary" @click="flight(getDeviceShadowState())" :disabled="isRequestInFlight">
-      refresh
-      <!-- <div v-if="!isRequestInFlight">refresh</div>
-      <div v-else class="spinner-border spinner-border-sm" role="status"></div> -->
-    </button>
   </div>
 </template>
 
@@ -65,12 +107,15 @@ export default {
   name: "App",
   data() {
     return {
-      setTemperature: 72,
+      setTemperature: null,
       userDesiredTemperature: null,
       measuredTemperature: null,
-      isDeviceOnline: false,
       state: null,
+      metadata: null,
       isRequestInFlight: false,
+      inErrorState: false,
+      authToken: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+      isAuthTokenValid: false,
     };
   },
   computed: {
@@ -81,7 +126,7 @@ export default {
           this.userDesiredTemperature
         );
       }
-      return true;
+      return false;
     },
     timeout() {
       return (
@@ -90,17 +135,41 @@ export default {
           this.state.reported.thermostat_temperature -
             this.userDesiredTemperature
         ) *
-          1000
+          1200
       );
+    },
+    isDeviceOnline() {
+      if (this.state) {
+        const reportedTimestamp =
+          this.metadata.reported.thermostat_temperature.timestamp * 1000;
+        if (Date.now() - reportedTimestamp < 60000) {
+          return true;
+        }
+      }
+      return false;
+    },
+  },
+  watch: {
+    async authToken(token) {
+      if (token.length === 36) {
+        try {
+          await this.flight(this.retry, [this.getDeviceShadowState, 1]);
+          this.userDesiredTemperature =
+            this.state.desired.thermostat_temperature;
+          this.isAuthTokenValid = true;
+        } catch (error) {
+          this.isAuthTokenValid = false;
+          console.log(error);
+        }
+      }
     },
   },
   methods: {
-    // todo - fix function wrapping 
-    async flight(fn) {
-      console.log('in flight')
+    async flight(fn, args) {
+      console.log("in flight");
       this.isRequestInFlight = true;
-      const result = await fn;
-      console.log('landed')
+      const result = await fn.apply(this, args);
+      console.log("landed");
       this.isRequestInFlight = false;
       return result;
     },
@@ -113,7 +182,8 @@ export default {
         url: "https://vh3rmjhs10.execute-api.us-east-1.amazonaws.com/test/thermostat/state",
         headers: {
           // ! todo - CHANGE AUTH TOKEN BEFORE PUSHING TO GITHUB
-          authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+          // authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+          authorization: this.authToken,
           "Content-Type": "application/json",
         },
         data: {
@@ -131,19 +201,20 @@ export default {
 
       await this.wait(this.timeout);
       try {
-        await this.retry(this.getDeviceShadowState, 2);
+        await this.retry(this.getDeviceShadowState, 1);
       } catch (error) {
-        // show warning
         console.log(error);
       }
     },
     async getDeviceShadowState() {
+      console.log("getDeviceShadowState");
       const config = {
         method: "get",
         url: "https://vh3rmjhs10.execute-api.us-east-1.amazonaws.com/test/thermostat/state",
         headers: {
           // ! todo - REMOVE BEFORE PUSHING TO GITHUB
-          authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+          // authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+          authorization: this.authToken,
           "Content-Type": "application/json",
         },
       };
@@ -157,40 +228,80 @@ export default {
       }
 
       this.state = response.data.state;
+      this.metadata = response.data.metadata;
 
       // if there is delta, throw error
       if (this.state.delta) {
-        throw new Error("state has delta");
+        this.inErrorState = true;
+        throw new Error("State has delta");
       }
+      this.inErrorState = false;
       console.log("refresh compelete");
       return;
     },
     async retry(fn, n) {
       for (let i = 0; i < n; i++) {
-        console.log('retry')
+        console.log("retry");
         try {
-          return await fn();
+          return await fn.call();
         } catch (error) {
           console.log(error);
           await this.wait(this.timeout);
         }
       }
-      throw new Error("something is wrong");
+      this.inErrorState = true;
+      throw new Error("Retry maxed out - something is wrong");
     },
     wait(ms) {
       return new Promise((res) => setTimeout(res, ms));
     },
   },
   async beforeMount() {
-    await this.flight(this.retry(this.getDeviceShadowState, 1))
-    this.userDesiredTemperature = this.state.desired.thermostat_temperature;
+    setInterval(() => {
+      if (this.isAuthTokenValid && !this.isRequestInFlight) {
+        try {
+          this.getDeviceShadowState();
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    }, 60000);
   },
 };
 </script>
 
 <style>
 html,
+body,
 body > div {
-  background-color: lightcoral;
+  background-color: lightgrey !important;
+}
+
+.dot {
+  height: 15px;
+  width: 15px;
+  margin-top: 5px;
+  border-radius: 50%;
+  display: inline-block;
+  background-color: red;
+}
+.device-online {
+  background-color: green;
+  animation: blink 3s infinite;
+}
+
+.device-state-unknown {
+  background-color: blueviolet;
+}
+
+/* Group same frames together */
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0;
+  } /* more concise! */
+  50% {
+    opacity: 1;
+  }
 }
 </style>
