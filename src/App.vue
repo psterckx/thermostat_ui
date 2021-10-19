@@ -91,6 +91,13 @@
             v-model="authToken"
             type="text"
             class="form-control"
+            :class="[
+              isAuthTokenValid
+                ? 'is-valid'
+                : authToken.length > 0
+                ? 'is-invalid'
+                : '',
+            ]"
             placeholder=""
             :disabled="isAuthTokenValid"
           />
@@ -114,7 +121,7 @@ export default {
       metadata: null,
       isRequestInFlight: false,
       inErrorState: false,
-      authToken: "a31a7655-a633-4a1c-b044-7c20609d1d45",
+      authToken: "",
       isAuthTokenValid: false,
     };
   },
@@ -142,7 +149,8 @@ export default {
       if (this.state) {
         const reportedTimestamp =
           this.metadata.reported.thermostat_temperature.timestamp * 1000;
-        if (Date.now() - reportedTimestamp < 60000) {
+        if (Date.now() - reportedTimestamp < 60000 * 60) {
+          // one hour
           return true;
         }
       }
@@ -175,14 +183,13 @@ export default {
     },
     updateUserDesiredTemperature(by) {
       this.userDesiredTemperature += by;
+      console.log(this.$route);
     },
     async updateSetTemperature(temperature) {
       const config = {
         method: "post",
         url: "https://vh3rmjhs10.execute-api.us-east-1.amazonaws.com/test/thermostat/state",
         headers: {
-          // ! todo - CHANGE AUTH TOKEN BEFORE PUSHING TO GITHUB
-          // authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
           authorization: this.authToken,
           "Content-Type": "application/json",
         },
@@ -212,8 +219,6 @@ export default {
         method: "get",
         url: "https://vh3rmjhs10.execute-api.us-east-1.amazonaws.com/test/thermostat/state",
         headers: {
-          // ! todo - REMOVE BEFORE PUSHING TO GITHUB
-          // authorization: "a31a7655-a633-4a1c-b044-7c20609d1d45",
           authorization: this.authToken,
           "Content-Type": "application/json",
         },
@@ -266,6 +271,11 @@ export default {
         }
       }
     }, 60000);
+  },
+  mounted() {
+    if (this.$route.query.t) {
+      this.authToken = this.$route.query.t;
+    }
   },
 };
 </script>
