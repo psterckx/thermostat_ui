@@ -114,7 +114,6 @@ export default {
   name: "App",
   data() {
     return {
-      setTemperature: null,
       userDesiredTemperature: null,
       measuredTemperature: null,
       state: null,
@@ -234,6 +233,7 @@ export default {
 
       this.state = response.data.state;
       this.metadata = response.data.metadata;
+      this.userDesiredTemperature = this.state.reported.thermostat_temperature;
 
       // if there is delta, throw error
       if (this.state.delta) {
