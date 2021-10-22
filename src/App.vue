@@ -13,7 +13,7 @@
               : "??"
           }}
         </div>
-        <div class="col-12 text-center mb-2">Set Temperature</div>
+        <div class="col-12 text-center mb-2">set temperature</div>
         <div class="col-12 text-center fs-3">
           {{
             !isAuthTokenValid
@@ -23,7 +23,7 @@
               : "??"
           }}
         </div>
-        <div class="col-12 text-center mb-5">Measured Temperature</div>
+        <div class="col-12 text-center mb-5">measured temperature</div>
         <div class="col-5 offset-1 text-center">
           <button
             type="button"
@@ -270,7 +270,7 @@ export default {
           console.log(error);
         }
       }
-    }, 60000);
+    }, 60000 * 5); // automatically refresh every 5 minutes
   },
   mounted() {
     if (this.$route.query.t) {
@@ -304,12 +304,15 @@ body > div {
   background-color: blueviolet;
 }
 
-/* Group same frames together */
+.container {
+  max-width: 500px !important;
+}
+
 @keyframes blink {
   0%,
   100% {
     opacity: 0;
-  } /* more concise! */
+  }
   50% {
     opacity: 1;
   }
