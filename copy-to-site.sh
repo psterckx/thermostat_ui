@@ -1,14 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 
-# abort on errors
-set -e
-
-# build
 npm run build
-
-# navigate into the build output directory
-cd dist
-
-cp -r dist/. ../../../../web/personal/psterckx.github.io/thermostat
-
-cd -
+cp -r dist/. ../../../../web/personal/psterckx.github.io/thermostat/.

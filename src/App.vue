@@ -149,8 +149,8 @@ export default {
       if (this.state) {
         const reportedTimestamp =
           this.metadata.reported.thermostat_temperature.timestamp * 1000;
-        if (Date.now() - reportedTimestamp < 60000 * 60) {
-          // one hour
+        if (Date.now() - reportedTimestamp < 60000 * 15) {
+          // 15 minutes
           return true;
         }
       }
